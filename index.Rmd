@@ -20,22 +20,27 @@ knitr::opts_chunk$set(#dev.args=list(bg="transparent"),
                       echo = FALSE, 
                       message=FALSE, 
                       warning=FALSE,
-                      fig.width=11, 
-                      fig.height=6.5, 
+                      fig.width=8, 
+                      fig.height=5, 
                       cache = TRUE)
 
 library(tidyverse)
+
 library(ggthemes)
 library(magick)
+library(gganimate)
+library(animation)
+library(patchwork)
+
+library(fable)
+
+
 theme_set(theme_solarized(base_size=16))
 scale_colour_discrete <- function(...) scale_colour_solarized()
 scale_fill_discrete <- function(...) scale_fill_solarized()
 pal <- solarized_pal()(6)
-
 txtcolor <- "#586e75"
 
-
-library(patchwork)
 ggimage <- function(path, transparent = FALSE){
   img <- magick::image_read(path)
   if(transparent)  img <- magick::image_transparent(img, "white")
@@ -47,9 +52,7 @@ ggimage <- function(path, transparent = FALSE){
           axis.ticks = element_blank(), 
           axis.text = element_blank(), 
           axis.title = element_blank())
-  
 }
-
 ggblank <- function() ggplot() + geom_blank() + 
   theme(axis.line = element_blank(), panel.background = element_blank())
 
@@ -61,17 +64,9 @@ class: center, top
 
 ---
 
-# My talk title here
+# Theoretical Limits to Forecasting in Ecological Systems 
 
-## Subtitle H2
-
-### H3
-
-#### H4
-
-##### H5 
-
-Text with *emphasis*
+## (And What to Do About It)
 
 <div class="my-footer">
 
@@ -81,25 +76,352 @@ Text with *emphasis*
 
 </div>
 
+
+```{r}
+n_s <- 121
+states <- seq(0, 120, length = n_s)
+actions <- seq(0, 120, length = n_s)
+
+## Model constants -- used to compute transistion probabilities
+efficiency <- .4    
+p <- list(r = .8, K = 153, q = 2, b = 20, sigma = .05, x0 = 20) # fixed parameters
+
+may <- function(a){  
+  function(x, h = 0){ # May
+    y <- x - efficiency * h
+    pmax(
+      ## controlling h is controlling the bifurcation point directly...
+      y + y * p$r * (1 - y / p$K)  - a * y ^ p$q / (y ^ p$q + p$b ^ p$q),  
+      0)
+  }
+}
+```
+
+```{r}
+transition_matrix <- function(states, actions, f, sigma){
+    n_s <- length(states)
+    n_a <- length(actions)
+    transition <- array(0, dim = c(n_s, n_s, n_a))
+    for(i in 1:n_a){
+      for (k in 1:n_s) {
+          nextpop <- f(states[k], actions[i])
+          if (nextpop <= 0) {
+            x  <- c(1, rep(0, n_s - 1))
+          } else {
+            x <- truncnorm::dtruncnorm(states, 0, max(states), nextpop, sigma * nextpop)
+            if(sum(x) <= 0){ 
+              x  <- c(1, rep(0, n_s - 1))
+            } else {
+              x <- x / sum(x)
+            }
+          }
+          transition[k, , i] <- x
+      }
+  }
+  if(any(is.na(transition))) stop("error creating transition matrix")
+transition
+}
+```
+
+```{r}
+## `actions` is an argument of indices, not necessarily the action values themselves 
+sim <- function (transition,  x0, Tmax, action = rep(1, Tmax)){
+    n_states <- dim(transition)[2]
+    state <- numeric(Tmax + 1)
+    state[1] <- x0
+    time <- 1:Tmax
+    for (t in time) {
+        state[t + 1] <- base::sample(1:n_states, 
+                               1, 
+                               prob = transition[state[t], , action[t]])
+    }
+    data.frame(time = 1:Tmax, state = state[time])
+}
+```
+
+
+
+```{r}
+P_ghost <- transition_matrix(states, actions, may(27.2), p$sigma)
+P_weak_attractor <- transition_matrix(states, actions, may(27.6), p$sigma)
+P_bistable <- transition_matrix(states, actions, may(28), p$sigma)
+```
+
+
+```{r}
+x0 <- which.min(abs(states - p$x0))
+Tmax <- 200
+set.seed(12345)
+reps <- 50
+ghost_sim <- map_dfr(1:reps, function(i)
+  sim(P_ghost, x0, Tmax)  %>% mutate(state = states[state], scenario = "ghost"),
+  .id = "rep")
+weak <- map_dfr(1:reps, function(i)
+  sim(P_weak_attractor, x0, Tmax)  %>% mutate(state = states[state], scenario = "bistable"),
+  .id = "rep")
+bistable  <- map_dfr(1:reps, function(i)
+  sim(P_bistable, x0, Tmax)  %>% mutate(state = states[state], scenario = "bistable"),
+  .id = "rep")
+```
+
+
 ---
 
-# First Slide
 
-.pull-left[
-
-- bulleted list
-- the bullets are invisible
-- that's nicer for centered text
-
-]
-.pull-right[
-
-```{r fig.width=6, fig.height=4}
-ggplot(mtcars, aes(cyl, mpg, fill=as.factor(cyl))) +
-  geom_bar(stat="identity", show.legend = FALSE) + 
-  ggtitle("Not mtcars again!")
+```{r}
+#fig1_sims <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/fig1_sims.csv")
+#bistable <- fig1_sims %>% filter(scenario == "bistable")
+rep1 <- weak %>% filter(rep == 2, time <= 100) %>% select(time, state)
 ```
-]
+
+```{r}
+p1 <-  rep1 %>%
+  ggplot(aes(time, state)) + 
+  geom_line(lwd=1.5, col = pal[1]) 
+
+a1 <- p1 +
+  geom_point(size = 4) +
+  transition_reveal(time) 
+
+animate(a1, nframes = 200, end_pause = 5)
+
+```
+
+---
+
+````{r}
+horizon <- 200
+fable <- rep1 %>%
+    as_tsibble(index = time) %>%
+  model(arima = ARIMA(state)) %>% 
+  forecast(h = horizon) %>%
+  mutate(sd = map_dbl(.distribution, "sd"))
+
+
+rep1 %>% filter(time <= 100) %>%
+  ggplot(aes(time, state)) + 
+  geom_line(lwd=1.5, col = pal[1]) + 
+  geom_line(data = fable, aes(time, state), col=txtcolor, lwd=1.5) + 
+  geom_ribbon(data = fable, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
+              col=NA, fill=txtcolor, alpha = 0.2) + 
+  coord_cartesian(xlim= c(0,100+ horizon), ylim = c(0,60))
+
+```
+
+---
+
+## Comparison to Nerual Net forecast
+
+```{r}
+nn_fc <- rep1 %>%
+    as_tsibble(index = time) %>%
+  model(nn = NNETAR(state)) %>% 
+  forecast(h = horizon, PI=TRUE) 
+nn_fc <- nn_fc %>%
+  mutate(sd = map_dbl(.distribution, function(x) sd(x[[1]][[1]])))
+
+fable <- bind_rows(fable, nn_fc)
+
+rep1 %>% filter(time <= 100) %>%
+  ggplot(aes(time, state)) + 
+  geom_line(lwd=1.5, col = pal[1]) + 
+  geom_line(data = fable, aes(time, state, col=model), lwd=1.5) + 
+  geom_ribbon(data = fc, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd, col=model), 
+              col=NA, alpha = 0.2) + 
+  coord_cartesian(xlim= c(0,100+ horizon), ylim = c(0,60))
+```
+
+
+
+---
+
+```{r}
+set.seed(12345678)
+x0 <- rep1 %>% filter(time==100) %>% pull(state)
+fc  <- map_dfr(1:reps, function(i)
+  sim(P_weak_attractor, x0, horizon)  %>% mutate(state = states[state]), .id = "rep") %>% 
+  mutate(time = time + 100, rep = as.integer(rep))
+```
+
+```{r}
+p2 <- fc %>%
+  ggplot() + 
+  geom_line(aes(time, state, group=rep), alpha =  0.25, col=pal[1], lwd=1.5) +
+  geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 2) + 
+  geom_ribbon(data = fable, 
+              aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
+              col=NA, fill=txtcolor, alpha = 0.2) + 
+  geom_line(data = rep1, aes(time, state), lwd = 2, col=pal[1]) + 
+  coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,60))
+
+
+a2 <- p2 +
+  transition_time(rep) + 
+  shadow_mark(alpha = 0.6, color=pal[1])
+
+animate(a2, nframes = 300, end_pause = 50)
+```
+
+
+---
+
+```{r}
+p2
+```
+
+---
+
+
+
+```{r}
+p2 +   coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,130))
+```
+
+
+---
+
+# May often look like a good forecast...
+
+```{r}
+means <- fc %>% group_by(rep) %>% summarise(mean_state = mean(state))
+
+bad <- means %>% filter(mean_state > 40) %>% pull(rep)
+good <- means %>% filter(mean_state > 40) %>% pull(rep)
+
+good %>%
+  ggplot() + 
+  geom_line(aes(time, state, group=rep), alpha =  0.25, col=pal[1], lwd=1.5) +
+  geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 2) + 
+  geom_ribbon(data = fable, 
+              aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
+              col=NA, fill=txtcolor, alpha = 0.2) + 
+  geom_line(data = rep1, aes(time, state), lwd = 2, col=pal[1]) + 
+  coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,60))
+```
+
+
+---
+
+
+# Potential contexts
+
+
+---
+background-image: url(../image-library/royalsociety/forest-fire.jpg)
+background-position: center
+background-size: 120%
+class: center, top
+
+---
+background-image: url(../image-library/royalsociety/methane_bubbles.jpg)
+background-position: center
+background-size: 100%
+class: center, top
+
+
+---
+background-image: url(../image-library/img/flickr-vsmoothe-pine-beetle.jpg)
+background-position: center
+background-size: 100%
+class: bottom, right, inverse
+
+credit: flickr user vsmoothe, CC0
+
+---
+
+## Potential Well
+
+```{r}
+f <- may(28)
+theory <- tibble(x = states) %>%
+  mutate(f = f(x,0) - x,potential = - cumsum(f))
+```
+
+
+```{r}
+df <- bistable %>% 
+  select(x = state, rep) %>% 
+  left_join(theory) %>%
+  filter(rep %in% 1:20) %>%
+  mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
+  
+theory %>%
+  ggplot(aes(x, potential)) + 
+  geom_line(lwd = 3, col = pal[1]) +
+  geom_jitter(data = df, alpha = 0.1) + 
+  theme(axis.text.y = element_blank())
+```
+
+---
+
+
+
+```{r}
+df <- bistable %>% 
+  select(x = state, rep) %>% 
+  left_join(theory) %>%
+  mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
+  
+theory %>%
+  ggplot(aes(x, potential)) + 
+  geom_line(lwd = 3, col = pal[1]) +
+  geom_jitter(data = df, alpha = 0.1) + 
+  theme(axis.text.y = element_blank())
+```
+
+
+---
+
+## Sufficient Statistics
+
+---
+
+
+
+
+---
+
+# Learning over management
+
+```{r}
+posterior <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/learning_posterior.csv")
+
+Tmax <- 50
+model_names <- c("Ghost", "Bistable")
+
+p <- posterior %>% 
+  data.frame(time = 1:Tmax) %>%
+  #filter(time %in% seq(1,Tmax, length.out = 10)) %>%
+  gather(param, probability, -time, factor_key =TRUE) %>% 
+  mutate(model = model_names[as.integer(param)], time = time+2000) %>% 
+  ggplot(aes(x = model, y = probability)) +
+  geom_bar(stat="identity", position = "identity", show.legend = FALSE, fill=pal[1]) +
+  transition_time(time) +
+  ease_aes('linear') #+ 
+  #labs(title = 'Year: {time}')
+
+animate(p, nframes = 300, end_pause = 5)
+```
+
+---
+
+```{r}
+learning_df <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/learning_df.csv")
+
+learning_df %>% select(-value, -obs) %>% 
+  gather(series, state, -time) %>% 
+  mutate(state = states[state]) %>%
+  ggplot(aes(time, state, color = series)) + 
+  geom_line(lwd= 2)
+```
+
+
+---
+
+# Conclusions
+
+
+
 
 
 
