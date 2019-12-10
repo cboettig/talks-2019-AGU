@@ -220,14 +220,15 @@ nn_fc <- rep1 %>%
 nn_fc <- nn_fc %>%
   mutate(sd = map_dbl(.distribution, function(x) sd(x[[1]][[1]])))
 
-fable <- bind_rows(fable, nn_fc)
+fable2 <- bind_rows(select(as_tibble(fable), time, state, .model, sd), 
+                    select(as_tibble(nn_fc), time, state, .model, sd))
 
 rep1 %>% filter(time <= 100) %>%
   ggplot(aes(time, state)) + 
   geom_line(lwd=1.5, col = pal[1]) + 
-  geom_line(data = fable, aes(time, state, col=model), lwd=1.5) + 
-  geom_ribbon(data = fc, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd, col=model), 
-              col=NA, alpha = 0.2) + 
+  geom_line(data = fable2, aes(time, state, col=.model), lwd=1.5) + 
+  geom_ribbon(data = fable2, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd, fill=.model), 
+              alpha = 0.2) + 
   coord_cartesian(xlim= c(0,100+ horizon), ylim = c(0,60))
 ```
 
