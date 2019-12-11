@@ -371,7 +371,6 @@ learning_df <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/
 
 learning_df %>% select(-value, -obs) %>% 
   gather(series, state, -time) %>% 
-  mutate(state = states[state]) %>%
   ggplot(aes(time, state, color = series)) + 
   geom_line(lwd= 2)
 ```
