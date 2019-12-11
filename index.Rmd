@@ -286,10 +286,10 @@ p2 +   coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,130))
 ```{r}
 means <- fc %>% group_by(rep) %>% summarise(mean_state = mean(state))
 
-bad <- means %>% filter(mean_state > 40) %>% pull(rep)
-good <- means %>% filter(mean_state > 40) %>% pull(rep)
+bad <- means %>% filter(mean_state > 30) %>% pull(rep)
+good <- means %>% filter(mean_state <= 30) %>% pull(rep)
 
-good %>%
+filter(fc, rep %in% good) %>%
   ggplot() + 
   geom_line(aes(time, state, group=rep), alpha =  0.25, col=pal[1], lwd=1.5) +
   geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 2) + 
@@ -304,7 +304,7 @@ good %>%
 ---
 
 
-# Potential contexts
+# Potential tipping point systems
 
 
 ---
@@ -333,32 +333,32 @@ credit: flickr user vsmoothe, CC0
 ## Potential Well
 
 ```{r}
-f <- may(28)
+f <- may(27.6)
 theory <- tibble(x = states) %>%
   mutate(f = f(x,0) - x,potential = - cumsum(f))
 ```
 
 
 ```{r}
-df <- bistable %>% 
-  select(x = state, rep) %>% 
+df <- rep1 %>% 
+  select(x = state) %>% 
   left_join(theory) %>%
-  filter(rep %in% 1:20) %>%
   mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
   
 theory %>%
   ggplot(aes(x, potential)) + 
   geom_line(lwd = 3, col = pal[1]) +
-  geom_jitter(data = df, alpha = 0.1) + 
+  geom_jitter(data = df, alpha = 0.4) + 
   theme(axis.text.y = element_blank())
 ```
 
 ---
 
+## Potential Well
 
 
 ```{r}
-df <- bistable %>% 
+df <- fc %>% 
   select(x = state, rep) %>% 
   left_join(theory) %>%
   mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
@@ -369,7 +369,6 @@ theory %>%
   geom_jitter(data = df, alpha = 0.1) + 
   theme(axis.text.y = element_blank())
 ```
-
 
 ---
 
@@ -377,6 +376,56 @@ theory %>%
 
 ---
 
+# Model Inference
+
+Hierarchical Bayesian estimation of stability
+
+```r
+library("greta")
+
+mean <- x_t + r * x_t * (1 - x_t / K) - 
+        a * x_t ^ q / (x_t ^ q + b ^ q)
+distribution(x_t1) <- normal(mean, sigma_g * x_t)
+
+a <- uniform(.25, .34) # Prior
+
+draws <- mcmc(model(a), n_samples = 1000, warmup = 3000, chains = 4)
+```
+
+Using TensorFlow(R) via `greta` R package, <https://greta-stats.org>
+
+
+---
+
+## Perfect knowledge of structure 
+
+(MCMC estimate of parameters)
+
+```{r est_predict}
+model_forecast %>% 
+  filter(set == "predicted") %>%
+  ggplot(aes(t,x)) +
+  geom_line(aes(group = interaction(reps, set), col = set),
+            show.legend = FALSE, alpha = .3) + 
+  geom_line(data = train) +
+  coord_cartesian(ylim=c(0,450))
+```
+---
+
+
+## Perfect information:
+
+```{r true_predict}
+train <-readr::read_csv("../talks-2019-theory/data/arima_forecast.csv.gz") %>% filter(t < 2000)
+model_forecast <- readr::read_csv("../talks-2019-theory/data/model_forecast.csv.gz")
+model_forecast %>% 
+  filter(set == "true") %>%
+  ggplot(aes(t,x)) +
+  geom_line(aes(group = interaction(reps, set), col = set), 
+            alpha = .1, show.legend = FALSE) + 
+  geom_line(data = train)+
+  coord_cartesian(ylim=c(0,450))
+```
 
 
 
