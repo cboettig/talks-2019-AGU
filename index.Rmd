@@ -33,6 +33,7 @@ library(animation)
 library(patchwork)
 
 library(fable)
+library(transformr)
 
 
 theme_set(theme_solarized(base_size=16))
@@ -139,29 +140,19 @@ sim <- function (transition,  x0, Tmax, action = rep(1, Tmax)){
 }
 ```
 
-
-
 ```{r}
-P_ghost <- transition_matrix(states, actions, may(27.2), p$sigma)
 P_weak_attractor <- transition_matrix(states, actions, may(27.6), p$sigma)
-P_bistable <- transition_matrix(states, actions, may(28), p$sigma)
 ```
-
 
 ```{r}
 x0 <- which.min(abs(states - p$x0))
 Tmax <- 200
 set.seed(12345)
 reps <- 50
-ghost_sim <- map_dfr(1:reps, function(i)
-  sim(P_ghost, x0, Tmax)  %>% mutate(state = states[state], scenario = "ghost"),
-  .id = "rep")
 weak <- map_dfr(1:reps, function(i)
   sim(P_weak_attractor, x0, Tmax)  %>% mutate(state = states[state], scenario = "bistable"),
   .id = "rep")
-bistable  <- map_dfr(1:reps, function(i)
-  sim(P_bistable, x0, Tmax)  %>% mutate(state = states[state], scenario = "bistable"),
-  .id = "rep")
+
 ```
 
 
@@ -169,9 +160,17 @@ bistable  <- map_dfr(1:reps, function(i)
 
 
 ```{r}
+train <-readr::read_csv("../talks-2019-theory/data/arima_forecast.csv.gz") %>% filter(t < 2000) 
+model_forecast <- readr::read_csv("../talks-2019-theory/data/model_forecast.csv.gz")
+rep1 <- train %>% select(time = t, state = x)
+
+```
+
+```{r}
 #fig1_sims <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/fig1_sims.csv")
 #bistable <- fig1_sims %>% filter(scenario == "bistable")
-rep1 <- weak %>% filter(rep == 2, time <= 100) %>% select(time, state)
+#rep1 <- weak %>% filter(rep == 2, time <= 100) %>% select(time, state)
+rep1 <- train
 ```
 
 ```{r}
@@ -190,7 +189,7 @@ animate(a1, nframes = 200, end_pause = 5)
 ---
 
 ````{r}
-horizon <- 200
+horizon <- 1000
 fable <- rep1 %>%
     as_tsibble(index = time) %>%
   model(arima = ARIMA(state)) %>% 
@@ -198,19 +197,19 @@ fable <- rep1 %>%
   mutate(sd = map_dbl(.distribution, "sd"))
 
 
-rep1 %>% filter(time <= 100) %>%
+rep1 %>% 
   ggplot(aes(time, state)) + 
   geom_line(lwd=1.5, col = pal[1]) + 
   geom_line(data = fable, aes(time, state), col=txtcolor, lwd=1.5) + 
   geom_ribbon(data = fable, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
               col=NA, fill=txtcolor, alpha = 0.2) + 
-  coord_cartesian(xlim= c(0,100+ horizon), ylim = c(0,60))
+  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120))
 
 ```
 
 ---
 
-## Comparison to Nerual Net forecast
+## Comparison to Neural Net forecast
 
 ```{r}
 nn_fc <- rep1 %>%
@@ -223,13 +222,13 @@ nn_fc <- nn_fc %>%
 fable2 <- bind_rows(select(as_tibble(fable), time, state, .model, sd), 
                     select(as_tibble(nn_fc), time, state, .model, sd))
 
-rep1 %>% filter(time <= 100) %>%
+rep1 %>% 
   ggplot(aes(time, state)) + 
   geom_line(lwd=1.5, col = pal[1]) + 
   geom_line(data = fable2, aes(time, state, col=.model), lwd=1.5) + 
   geom_ribbon(data = fable2, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd, fill=.model), 
               alpha = 0.2) + 
-  coord_cartesian(xlim= c(0,100+ horizon), ylim = c(0,60))
+  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120))
 ```
 
 
@@ -237,30 +236,34 @@ rep1 %>% filter(time <= 100) %>%
 ---
 
 ```{r}
-set.seed(12345678)
-x0 <- rep1 %>% filter(time==100) %>% pull(state)
-fc  <- map_dfr(1:reps, function(i)
-  sim(P_weak_attractor, x0, horizon)  %>% mutate(state = states[state]), .id = "rep") %>% 
-  mutate(time = time + 100, rep = as.integer(rep))
+fc  <- model_forecast %>%  
+  filter(set == "true") %>%
+  select(time = t, state = x, rep = reps)
 ```
 
 ```{r}
-p2 <- fc %>%
+means <- fc %>% group_by(rep) %>% summarise(mean_state = mean(state))
+bad <- means %>% filter(mean_state > 60) %>% pull(rep)
+good <- means %>% filter(mean_state <= 60) %>% pull(rep)
+
+fc_sort <- fc %>% filter(rep < 50, rep %in% good) %>% bind_rows(filter(fc, rep > 50, rep %in% bad))
+
+p2 <-  fc_sort %>%
   ggplot() + 
-  geom_line(aes(time, state, group=rep), alpha =  0.25, col=pal[1], lwd=1.5) +
-  geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 2) + 
+  geom_line(aes(time, state, group=rep), alpha =  0.1, col=pal[1]) +
+  geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 1) + 
   geom_ribbon(data = fable, 
               aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
-              col=NA, fill=txtcolor, alpha = 0.2) + 
-  geom_line(data = rep1, aes(time, state), lwd = 2, col=pal[1]) + 
-  coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,60))
+              col=NA, fill=txtcolor, alpha = 0.3) + 
+  geom_line(data = rep1, aes(time, state), lwd = 1.5, col=pal[1]) + 
+  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120))
 
 
 a2 <- p2 +
   transition_time(rep) + 
-  shadow_mark(alpha = 0.6, color=pal[1])
+  shadow_mark(alpha = 0.1, color=pal[1])
 
-animate(a2, nframes = 300, end_pause = 50)
+animate(a2, nframes = 200, end_pause = 50)
 ```
 
 
@@ -275,29 +278,8 @@ p2
 
 
 ```{r}
-p2 +   coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,130))
-```
+p2 + coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,200))
 
-
----
-
-# May often look like a good forecast...
-
-```{r}
-means <- fc %>% group_by(rep) %>% summarise(mean_state = mean(state))
-
-bad <- means %>% filter(mean_state > 30) %>% pull(rep)
-good <- means %>% filter(mean_state <= 30) %>% pull(rep)
-
-filter(fc, rep %in% good) %>%
-  ggplot() + 
-  geom_line(aes(time, state, group=rep), alpha =  0.25, col=pal[1], lwd=1.5) +
-  geom_line(data = fable, aes(time, state), col=txtcolor, lwd = 2) + 
-  geom_ribbon(data = fable, 
-              aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd ), 
-              col=NA, fill=txtcolor, alpha = 0.2) + 
-  geom_line(data = rep1, aes(time, state), lwd = 2, col=pal[1]) + 
-  coord_cartesian(xlim= c(0,100+horizon), ylim = c(0,60))
 ```
 
 
@@ -416,8 +398,6 @@ model_forecast %>%
 ## Perfect information:
 
 ```{r true_predict}
-train <-readr::read_csv("../talks-2019-theory/data/arima_forecast.csv.gz") %>% filter(t < 2000)
-model_forecast <- readr::read_csv("../talks-2019-theory/data/model_forecast.csv.gz")
 model_forecast %>% 
   filter(set == "true") %>%
   ggplot(aes(t,x)) +
