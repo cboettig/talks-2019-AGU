@@ -82,25 +82,23 @@ class: center, top
 
 ---
 
+# A simple forecast
 
 ```{r}
 train <-readr::read_csv("../talks-2019-theory/data/arima_forecast.csv.gz") %>% filter(t < 2000) 
 model_forecast <- readr::read_csv("../talks-2019-theory/data/model_forecast.csv.gz")
 rep1 <- train %>% select(time = t, state = x)
+horizon <- 1000
 
 ```
 
-```{r}
-#fig1_sims <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/fig1_sims.csv")
-#bistable <- fig1_sims %>% filter(scenario == "bistable")
-#rep1 <- weak %>% filter(rep == 2, time <= 100) %>% select(time, state)
-rep1 <- train %>% select(state = x, time = t)
-```
 
 ```{r}
 p1 <-  rep1 %>%
   ggplot(aes(time, state)) + 
-  geom_line(lwd=1.5, col = pal[1]) 
+  geom_line(lwd=1.5, col = pal[1]) + 
+  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120))
+
 
 a1 <- p1 +
   geom_point(size = 4) +
@@ -112,8 +110,9 @@ animate(a1, nframes = 200, end_pause = 5)
 
 ---
 
+# A simple forecast
+
 ````{r}
-horizon <- 1000
 fable <- rep1 %>%
     as_tsibble(index = time) %>%
   model(arima = ARIMA(state)) %>% 
@@ -133,7 +132,7 @@ rep1 %>%
 
 ---
 
-## Comparison to Neural Net forecast
+## Neural Net forecast
 
 ```{r}
 nn_fc <- rep1 %>%
@@ -159,6 +158,9 @@ rep1 %>%
 
 
 ---
+
+# Compare our forecast realizations of the underlying process
+
 
 ```{r}
 fc  <- model_forecast %>%  
@@ -194,12 +196,16 @@ animate(a2, nframes = 200, end_pause = 50)
 
 ---
 
+# Compare our forecast realizations of the underlying process
+
+
 ```{r}
 p2
 ```
 
 ---
 
+# Compare our forecast realizations of the underlying process
 
 
 ```{r}
@@ -281,8 +287,13 @@ pot %>%
 
 # Sufficient Statistics & Identifiability
 
+--
 
+### Forecasting is hard... especially when trying to predict things we haven't yet seen!
 
+--
+
+### Theory can help define the space of the possible
 
 ---
 
@@ -307,7 +318,7 @@ Using TensorFlow(R) via `greta` R package, <https://greta-stats.org>
 
 ---
 
-## Perfect knowledge of structure 
+## Given knowledge of structure 
 
 ### Uncertainty in model estimate
 
@@ -324,7 +335,9 @@ model_forecast %>%
 
 ---
 
-## Perfect information:
+## Perfect information of model and parameters
+
+### (i.e. best possible forecast)
 
 ```{r true_predict}
 model_forecast %>% 
@@ -346,7 +359,187 @@ model_forecast %>%
 
 
 ---
+class: center
 
+# Decision Theory
+
+.pull-left[
+
+## Societal Dynamics
+
+Utility function $U(x_t,a_t)$
+
+Given state $x_t$ and action $a_t$, balance
+costs and benefits.
+
+<img src="../image-library/royalsociety//balance.jpg" width="300px">
+
+]
+
+--
+
+.pull-right[
+
+## Ecological Dynamics
+
+Transition function (forecast probabilities) $f(x,a)$
+
+```{r }
+model_forecast %>% 
+  filter(set == "true") %>%
+  ggplot(aes(t,x)) +
+  geom_line(aes(group = interaction(reps, set), col = set), 
+            alpha = .1, show.legend = FALSE) + 
+  geom_line(data = train)+
+  coord_cartesian(ylim=c(0,450))
+```
+
+]
+
+
+
+---
+background-image: url(../image-library/img/chess.jpg)
+background-position: left
+background-size: 120%
+class: center, bottom
+
+
+# Decision Theory
+
+---
+
+# Beetle Outbreak
+
+```{r}
+ggimage("../image-library/img/pine-resin-response.jpg")  + 
+  (ggimage("../image-library/img/pine-bark-beetle.jpg") / ggimage("../image-library/img/flickr-vsmoothe-pine-beetle.jpg") ) 
+```
+
+---
+
+# Alternate models
+
+
+```{r}
+## Discrete version of the state space and action space
+n_s <- 121
+states <- seq(0, 120, length = n_s)
+actions <- seq(0, 120, length = n_s)
+```
+
+```{r}
+## Model constants -- used to compute transistion probabilities
+efficiency <- .4    
+p <- list(r = .8, K = 153, q = 2, b = 20, sigma = .05, x0 = 20) # fixed parameters
+
+may <- function(a){  
+  function(x, h = 0){ # May
+    y <- x - efficiency * h
+    pmax(
+      ## controlling h is controlling the bifurcation point directly...
+      y + y * p$r * (1 - y / p$K)  - a * y ^ p$q / (y ^ p$q + p$b ^ p$q),  
+      0)
+  }
+}
+```
+
+```{r}
+c(`Stressed forest` = 27,           
+  `Healthy forest` = 28.5) %>%
+  map_dfr(function(a) tibble(x = states, f = may(a)(x,0) - x, a = a), .id = "scenario") %>% 
+  ggplot(aes(x, f)) + 
+    geom_line(aes(lty = scenario, col = scenario), lwd = 1) +
+    geom_hline(aes(yintercept = 0)) + 
+    labs(y = "beetle growth", x = "current beetle density (au)") + 
+    scale_color_solarized()
+
+```
+
+---
+
+## Optimal control strategies
+
+
+```{r}
+policy_plot <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/policy_plot.csv") %>%
+  mutate(scenario = fct_recode(model, healthy = "bistable", stressed = "ghost"))
+
+policy_plot %>%
+  ggplot(aes(state, action, color = scenario)) + 
+  geom_point(alpha=0.6) + 
+  scale_color_solarized() + xlab("beetle density")
+```
+
+---
+
+## Wrongly assuming forest is healthy:
+
+```{r}
+sims_by_prior <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/sims_by_prior.csv")
+
+p <- sims_by_prior %>% filter(prior == "bistable", reps == 1) %>%
+  select(time,state, action) %>%
+  gather(name, value, -time) %>%
+  ggplot(aes(time, value, col=name)) + 
+  geom_path(alpha=0.5, lwd = 1.5)
+
+animate(p +  geom_point(size = 4) +transition_reveal(time), 
+        nframes = 100)
+
+```
+
+---
+
+## Wrongly assuming forest is healthy:
+
+
+```{r}
+sims_by_prior %>% filter(prior == "bistable") %>%
+ select(-obs,-value) %>%
+  pivot_longer(c(-time, -prior, -reps)) %>%
+  ggplot(aes(time, value, group = interaction(name, reps), col=name)) + 
+  geom_path(alpha=0.5, lwd = 1)
+```
+
+---
+
+## Integrate over both models
+
+```{r}
+sims_by_prior %>% filter(prior == "fifty_fifty") %>%
+ select(-obs,-value) %>%
+  pivot_longer(c(-time, -prior, -reps)) %>%
+  ggplot(aes(time, value, group = interaction(name, reps), col=name)) + 
+  geom_path(alpha=0.5, lwd = 1)
+```
+
+---
+
+# Optimal management for the stressed forest
+
+```{r}
+sims_by_prior %>% filter(prior == "ghost", reps == 1) %>%
+  select(time,state, action) %>%
+  gather(name, value, -time) %>%
+  ggplot(aes(time, value, col=name)) + 
+  geom_path(alpha=1, lwd = 1.5)
+
+```
+
+
+---
+
+# Learning on the job
+
+## Adaptive Management, aka Reinforcement Learning
+
+--
+
+<img src="../image-library/royalsociety//waiting-in-the-shallows.jpg" width="450">
+
+
+---
 
 ```{r posterior, fig.height=3, fig.width=8}
 posterior <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/learning_posterior.csv")
@@ -385,9 +578,23 @@ animate(p5 +  geom_point(size = 4) +transition_reveal(time),
 
 # Conclusions
 
+### A precise forecast isn't always a better forecast
 
+--
 
+### Even when short term observations match the predictions
 
+--
+
+### We need better theory in order to make less precise forecasts
+
+--
+
+### Decision theory can help us determine actions under uncertainty
+
+--
+
+### A "good" forecast maximizes long-term utility, not goodness-of-fit
 
 
 ---
@@ -428,9 +635,9 @@ ggimage("../image-library/people/millie.png")) /
 
 ### Image Credits
 
-```{r fig.width=10, fig.height=2}
+```{r fig.width=8, fig.height=2}
 plot_spacer() + 
-  ggimage("../image-library/people/allison_horst_artist.jpg") + xlab("Allison Horst") + 
+  #ggimage("../image-library/people/allison_horst_artist.jpg") + xlab("Allison Horst") + 
   ggimage("../image-library/sponsors/royalsociety.jpg") + ylab("Image Credits")  +
   ggimage("../image-library/sponsors/noaa.png", TRUE) +
   plot_spacer() + plot_layout(ncol=5)
