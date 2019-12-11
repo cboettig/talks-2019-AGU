@@ -26,6 +26,7 @@ knitr::opts_chunk$set(#dev.args=list(bg="transparent"),
 
 library(tidyverse)
 
+library(icon)
 library(ggthemes)
 library(magick)
 library(gganimate)
@@ -92,7 +93,7 @@ rep1 <- train %>% select(time = t, state = x)
 #fig1_sims <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/fig1_sims.csv")
 #bistable <- fig1_sims %>% filter(scenario == "bistable")
 #rep1 <- weak %>% filter(rep == 2, time <= 100) %>% select(time, state)
-rep1 <- train
+rep1 <- train %>% select(state = x, time = t)
 ```
 
 ```{r}
