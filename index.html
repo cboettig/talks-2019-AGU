@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+  <head>
+    <title>Theoretical Limits to Forecasting</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Carl Boettiger" />
+    <meta name="date" content="2019-12-11" />
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/font-awesome-5.3.1/css/fontawesome-all.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="solarized-light.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+
+
+
+
+
+layout: true
+background-color: #fdf6e3
+class: center, top
+
+---
+
+# Theoretical Limits to Forecasting in Ecological Systems 
+
+## (And What to Do About It)
+
+&lt;div class="my-footer"&gt;
+
+&lt;a href="https://carlboettiger.info"&gt; <i class="fas  fa-user "></i> Carl Boettiger&lt;/a&gt; | 
+&lt;a href="https://berkeley.edu"&gt; <i class="fas  fa-briefcase "></i> UC Berkeley&lt;/a&gt; | 
+&lt;a href="https://twitter.com/cboettig"&gt; <i class="fab  fa-twitter "></i> @cboettig&lt;/a&gt;
+
+&lt;/div&gt;
+
+
+---
+
+# A simple forecast
+
+
+
+
+![](index_files/figure-html/unnamed-chunk-2-1.gif)&lt;!-- --&gt;
+
+---
+
+# A simple forecast
+
+![](index_files/figure-html/unnamed-chunk-3-1.png)&lt;!-- --&gt;
+
+---
+
+## Neural Net forecast
+
+![](index_files/figure-html/unnamed-chunk-4-1.png)&lt;!-- --&gt;
+
+
+
+---
+
+# Compare our forecast realizations of the underlying process
+
+
+
+
+![](index_files/figure-html/unnamed-chunk-6-1.gif)&lt;!-- --&gt;
+
+
+---
+
+# Compare our forecast realizations of the underlying process
+
+
+![](index_files/figure-html/unnamed-chunk-7-1.png)&lt;!-- --&gt;
+
+---
+
+# Compare our forecast realizations of the underlying process
+
+
+![](index_files/figure-html/unnamed-chunk-8-1.png)&lt;!-- --&gt;
+
+
+---
+
+
+# Potential tipping point systems
+
+
+---
+background-image: url(../image-library/royalsociety/forest-fire.jpg)
+background-position: center
+background-size: 120%
+class: center, top
+
+---
+background-image: url(../image-library/royalsociety/methane_bubbles.jpg)
+background-position: center
+background-size: 100%
+class: center, top
+
+
+---
+background-image: url(../image-library/img/flickr-vsmoothe-pine-beetle.jpg)
+background-position: center
+background-size: 100%
+class: bottom, right, inverse
+
+credit: flickr user vsmoothe, CC0
+
+---
+
+## Potential Well
+
+
+
+![](index_files/figure-html/unnamed-chunk-9-1.png)&lt;!-- --&gt;
+  
+
+---
+
+## Potential Well
+
+
+![](index_files/figure-html/unnamed-chunk-10-1.png)&lt;!-- --&gt;
+
+---
+
+# Sufficient Statistics &amp; Identifiability
+
+--
+
+### Forecasting is hard... especially when trying to predict things we haven't yet seen!
+
+--
+
+### Theory can help define the space of the possible
+
+---
+
+# Model Inference
+
+Hierarchical Bayesian estimation of uncertainty
+
+```r
+library("greta")
+
+mean &lt;- x_t + r * x_t * (1 - x_t / K) - 
+        a * x_t ^ q / (x_t ^ q + b ^ q)
+distribution(x_t1) &lt;- normal(mean, sigma_g * x_t)
+
+a &lt;- uniform(.25, .34) # Prior
+
+draws &lt;- mcmc(model(a), n_samples = 1000, warmup = 3000, chains = 4)
+```
+
+Using TensorFlow(R) via `greta` R package, &lt;https://greta-stats.org&gt;
+
+
+---
+
+## Given knowledge of structure 
+
+### Uncertainty in model estimate
+
+![](index_files/figure-html/est_predict-1.png)&lt;!-- --&gt;
+
+
+---
+
+## Perfect information of model and parameters
+
+### (i.e. best possible forecast)
+
+![](index_files/figure-html/true_predict-1.png)&lt;!-- --&gt;
+
+---
+
+# So what makes a good forecast?
+
+---
+
+# What do we do with this uncertainty?
+
+
+---
+class: center
+
+# Decision Theory
+
+.pull-left[
+
+## Societal Dynamics
+
+Utility function `\(U(x_t,a_t)\)`
+
+Given state `\(x_t\)` and action `\(a_t\)`, balance
+costs and benefits.
+
+&lt;img src="../image-library/royalsociety//balance.jpg" width="300px"&gt;
+
+]
+
+--
+
+.pull-right[
+
+## Ecological Dynamics
+
+Transition function (forecast probabilities) `\(f(x,a)\)`
+
+![](index_files/figure-html/unnamed-chunk-11-1.png)&lt;!-- --&gt;
+
+]
+
+
+
+---
+background-image: url(../image-library/img/chess.jpg)
+background-position: left
+background-size: 120%
+class: center, bottom
+
+
+# Decision Theory
+
+---
+
+# Beetle Outbreak
+
+![](index_files/figure-html/unnamed-chunk-12-1.png)&lt;!-- --&gt;
+
+---
+
+# Alternate models
+
+
+
+
+
+
+![](index_files/figure-html/unnamed-chunk-15-1.png)&lt;!-- --&gt;
+
+---
+
+## Optimal control strategies
+
+
+![](index_files/figure-html/unnamed-chunk-16-1.png)&lt;!-- --&gt;
+
+---
+
+## Wrongly assuming forest is healthy:
+
+![](index_files/figure-html/unnamed-chunk-17-1.gif)&lt;!-- --&gt;
+
+---
+
+## Wrongly assuming forest is healthy:
+
+
+![](index_files/figure-html/unnamed-chunk-18-1.png)&lt;!-- --&gt;
+
+---
+
+## Integrate over both models
+
+![](index_files/figure-html/unnamed-chunk-19-1.png)&lt;!-- --&gt;
+
+---
+
+# Optimal management for the stressed forest
+
+![](index_files/figure-html/unnamed-chunk-20-1.png)&lt;!-- --&gt;
+
+
+---
+
+# Learning on the job
+
+## Adaptive Management, aka Reinforcement Learning
+
+--
+
+&lt;img src="../image-library/royalsociety//waiting-in-the-shallows.jpg" width="450"&gt;
+
+
+---
+
+![](index_files/figure-html/posterior-1.gif)&lt;!-- --&gt;
+
+![](index_files/figure-html/learning-1.gif)&lt;!-- --&gt;
+
+
+---
+
+# Conclusions
+
+### A precise forecast isn't always a better forecast
+
+--
+
+### Even when short term observations match the predictions
+
+--
+
+### We need better theory in order to make less precise forecasts
+
+--
+
+### Decision theory can help us determine actions under uncertainty
+
+--
+
+### A "good" forecast maximizes long-term utility, not goodness-of-fit
+
+
+---
+
+# Acknowledgements
+
+.pull-left[
+
+## Group
+
+![](index_files/figure-html/unnamed-chunk-21-1.png)&lt;!-- --&gt;
+
+
+
+
+]
+.pull-right[
+
+
+## Funding
+
+![](index_files/figure-html/unnamed-chunk-22-1.png)&lt;!-- --&gt;
+
+
+### Image Credits
+
+![](index_files/figure-html/unnamed-chunk-23-1.png)&lt;!-- --&gt;
+
+]
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "solarized-light",
+"highlightLines": true,
+"countIncrementalSlides": false,
+"slideNumberFormat": "%current%"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
