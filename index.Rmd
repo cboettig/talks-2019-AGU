@@ -2,6 +2,7 @@
 author: "Carl Boettiger"
 institute: "UC Berkeley"
 date: "`r Sys.Date()`"
+title: Theoretical Limits to Forecasting
 output:
   xaringan::moon_reader:
     css: ["default", "solarized-light.css"]
@@ -151,7 +152,8 @@ rep1 %>%
   geom_line(data = fable2, aes(time, state, col=.model), lwd=1.5) + 
   geom_ribbon(data = fable2, aes(time, state, ymin = state - 2 *sd, ymax = state + 2 * sd, fill=.model), 
               alpha = 0.2) + 
-  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120))
+  coord_cartesian(xlim= c(0, length(rep1$state) + horizon), ylim = c(0,120)) + 
+  theme(legend.position = "bottom")
 ```
 
 
@@ -277,7 +279,10 @@ pot %>%
 
 ---
 
-## Sufficient Statistics
+# Sufficient Statistics & Identifiability
+
+
+
 
 ---
 
@@ -342,37 +347,37 @@ model_forecast %>%
 
 ---
 
-# Learning over management
 
-```{r}
+```{r posterior, fig.height=3, fig.width=8}
 posterior <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/learning_posterior.csv")
 
 Tmax <- 50
 model_names <- c("Ghost", "Bistable")
 
-p <- posterior %>% 
+p4 <- posterior %>% 
   data.frame(time = 1:Tmax) %>%
-  #filter(time %in% seq(1,Tmax, length.out = 10)) %>%
   gather(param, probability, -time, factor_key =TRUE) %>% 
   mutate(model = model_names[as.integer(param)], time = time+2000) %>% 
   ggplot(aes(x = model, y = probability)) +
-  geom_bar(stat="identity", position = "identity", show.legend = FALSE, fill=pal[1]) +
-  transition_time(time) +
-  ease_aes('linear') #+ 
-  #labs(title = 'Year: {time}')
+  geom_bar(stat="identity", position = "identity", show.legend = FALSE, fill=pal[1]) 
 
-animate(p, nframes = 300, end_pause = 5)
+animate(p4 +
+  transition_time(time) +
+  ease_aes('linear'), nframes=200, 
+  width = 800, height = 300)
 ```
 
----
-
-```{r}
+```{r learning, fig.height= 3, fig.width=8}
 learning_df <- read_csv("../decisions-vs-transients/manuscript/manuscript_cache/learning_df.csv")
 
-learning_df %>% select(-value, -obs) %>% 
+p5 <- learning_df %>% select(-value, -obs) %>% 
   gather(series, state, -time) %>% 
   ggplot(aes(time, state, color = series)) + 
   geom_line(lwd= 2)
+
+animate(p5 +  geom_point(size = 4) +transition_reveal(time), 
+        nframes = 200,
+        width = 800, height = 300)
 ```
 
 
