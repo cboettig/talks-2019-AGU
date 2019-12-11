@@ -78,84 +78,6 @@ class: center, top
 </div>
 
 
-```{r}
-n_s <- 121
-states <- seq(0, 120, length = n_s)
-actions <- seq(0, 120, length = n_s)
-
-## Model constants -- used to compute transistion probabilities
-efficiency <- .4    
-p <- list(r = .8, K = 153, q = 2, b = 20, sigma = .05, x0 = 20) # fixed parameters
-
-may <- function(a){  
-  function(x, h = 0){ # May
-    y <- x - efficiency * h
-    pmax(
-      ## controlling h is controlling the bifurcation point directly...
-      y + y * p$r * (1 - y / p$K)  - a * y ^ p$q / (y ^ p$q + p$b ^ p$q),  
-      0)
-  }
-}
-```
-
-```{r}
-transition_matrix <- function(states, actions, f, sigma){
-    n_s <- length(states)
-    n_a <- length(actions)
-    transition <- array(0, dim = c(n_s, n_s, n_a))
-    for(i in 1:n_a){
-      for (k in 1:n_s) {
-          nextpop <- f(states[k], actions[i])
-          if (nextpop <= 0) {
-            x  <- c(1, rep(0, n_s - 1))
-          } else {
-            x <- truncnorm::dtruncnorm(states, 0, max(states), nextpop, sigma * nextpop)
-            if(sum(x) <= 0){ 
-              x  <- c(1, rep(0, n_s - 1))
-            } else {
-              x <- x / sum(x)
-            }
-          }
-          transition[k, , i] <- x
-      }
-  }
-  if(any(is.na(transition))) stop("error creating transition matrix")
-transition
-}
-```
-
-```{r}
-## `actions` is an argument of indices, not necessarily the action values themselves 
-sim <- function (transition,  x0, Tmax, action = rep(1, Tmax)){
-    n_states <- dim(transition)[2]
-    state <- numeric(Tmax + 1)
-    state[1] <- x0
-    time <- 1:Tmax
-    for (t in time) {
-        state[t + 1] <- base::sample(1:n_states, 
-                               1, 
-                               prob = transition[state[t], , action[t]])
-    }
-    data.frame(time = 1:Tmax, state = state[time])
-}
-```
-
-```{r}
-P_weak_attractor <- transition_matrix(states, actions, may(27.6), p$sigma)
-```
-
-```{r}
-x0 <- which.min(abs(states - p$x0))
-Tmax <- 200
-set.seed(12345)
-reps <- 50
-weak <- map_dfr(1:reps, function(i)
-  sim(P_weak_attractor, x0, Tmax)  %>% mutate(state = states[state], scenario = "bistable"),
-  .id = "rep")
-
-```
-
-
 ---
 
 
@@ -314,25 +236,25 @@ credit: flickr user vsmoothe, CC0
 
 ## Potential Well
 
-```{r}
-f <- may(27.6)
-theory <- tibble(x = states) %>%
-  mutate(f = f(x,0) - x,potential = - cumsum(f))
-```
 
 
 ```{r}
-df <- rep1 %>% 
+## Slightly different model, parameterized discrete space. 
+weak <- read_csv("data/weak.csv.gz")
+pot <- read_csv("data/potential.csv")
+rep <- weak %>% filter(rep == 1, time <= 100) %>% select(time, state)
+df <- rep %>% 
   select(x = state) %>% 
-  left_join(theory) %>%
+  left_join(pot) %>%
   mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
   
-theory %>%
+pot %>%
   ggplot(aes(x, potential)) + 
   geom_line(lwd = 3, col = pal[1]) +
   geom_jitter(data = df, alpha = 0.4) + 
   theme(axis.text.y = element_blank())
 ```
+  
 
 ---
 
@@ -340,12 +262,12 @@ theory %>%
 
 
 ```{r}
-df <- fc %>% 
+df <- weak %>% 
   select(x = state, rep) %>% 
-  left_join(theory) %>%
+  left_join(pot) %>%
   mutate(potential = potential+abs(rnorm(length(potential), 5, 3)))
   
-theory %>%
+pot %>%
   ggplot(aes(x, potential)) + 
   geom_line(lwd = 3, col = pal[1]) +
   geom_jitter(data = df, alpha = 0.1) + 
@@ -360,7 +282,7 @@ theory %>%
 
 # Model Inference
 
-Hierarchical Bayesian estimation of stability
+Hierarchical Bayesian estimation of uncertainty
 
 ```r
 library("greta")
@@ -381,7 +303,7 @@ Using TensorFlow(R) via `greta` R package, <https://greta-stats.org>
 
 ## Perfect knowledge of structure 
 
-(MCMC estimate of parameters)
+### Uncertainty in model estimate
 
 ```{r est_predict}
 model_forecast %>% 
@@ -392,8 +314,9 @@ model_forecast %>%
   geom_line(data = train) +
   coord_cartesian(ylim=c(0,450))
 ```
----
 
+
+---
 
 ## Perfect information:
 
@@ -407,6 +330,13 @@ model_forecast %>%
   coord_cartesian(ylim=c(0,450))
 ```
 
+---
+
+# So what makes a good forecast?
+
+---
+
+# What do we do with this uncertainty?
 
 
 ---
